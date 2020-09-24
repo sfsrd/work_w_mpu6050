@@ -28,7 +28,11 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "mpu6050.h"
-/*#include "stm32f1xx_hal_uart.h"*/
+#include "stm32f1xx_hal.h"
+#include "ssd1306_tests.h"
+#include "ssd1306.h"
+#include "ssd1306_fonts.h"
+#include "stm32f1xx_hal_uart.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -49,7 +53,9 @@
 
 /* USER CODE BEGIN PV */
 MPU6050_t MPU6050;
-/*char msg[31];*/
+SSD1306_t SSD1306;
+HAL_StatusTypeDef status = 1;
+uint8_t SSD1306_Buffer[SSD1306_WIDTH * SSD1306_HEIGHT / 8];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -96,20 +102,68 @@ int main(void)
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
   while (MPU6050_Init(&hi2c1) == 1);
+  ssd1306_Reset();
+  HAL_Delay(200);
+
+  ssd1306_WriteCommand(0xAE); //display off
+  ssd1306_WriteCommand(0x20); //Set Memory Addressing Mode
+  ssd1306_WriteCommand(0x10); //00,Horizontal Addressing Mode;01,Vertical Addressing Mode;10,Page Addressing Mode (RESET);11,Invalid
+  ssd1306_WriteCommand(0xB0); //Set Page Start Address for Page Addressing Mode,0-7
+  ssd1306_WriteCommand(0xC8); //Set COM Output Scan Direction
+  ssd1306_WriteCommand(0x00); //---set low column address
+  ssd1306_WriteCommand(0x10); //---set high column address
+  ssd1306_WriteCommand(0x40); //--set start line address
+  ssd1306_WriteCommand(0x81); //--set contrast control register
+  ssd1306_WriteCommand(0xFF);
+  ssd1306_WriteCommand(0xA1); //--set segment re-map 0 to 127
+  ssd1306_WriteCommand(0xA6); //--set normal display
+  ssd1306_WriteCommand(0xA8); //--set multiplex ratio(1 to 64)
+  ssd1306_WriteCommand(0x3F); //
+  ssd1306_WriteCommand(0xA4); //0xa4,Output follows RAM content;0xa5,Output ignores RAM content
+  ssd1306_WriteCommand(0xD3); //-set display offset
+  ssd1306_WriteCommand(0x00); //-not offset
+  ssd1306_WriteCommand(0xD5); //--set display clock divide ratio/oscillator frequency
+  ssd1306_WriteCommand(0xF0); //--set divide ratio
+  ssd1306_WriteCommand(0xD9); //--set pre-charge period
+  ssd1306_WriteCommand(0x22); //
+  ssd1306_WriteCommand(0xDA); //--set com pins hardware configuration
+  ssd1306_WriteCommand(0x12);
+  ssd1306_WriteCommand(0xDB); //--set vcomh
+  ssd1306_WriteCommand(0x20); //0x20,0.77xVcc
+  ssd1306_WriteCommand(0x8D); //--set DC-DC enable
+  ssd1306_WriteCommand(0x14); //
+  ssd1306_WriteCommand(0xAF); //--turn on SSD1306 panel
+
+
+  ssd1306_Fill(Black);
+
+      // Flush buffer to screen
+  ssd1306_UpdateScreen();
+
+      // Set default values for screen object
+  SSD1306.CurrentX = 0;
+  SSD1306.CurrentY = 0;
+  SSD1306.Initialized = 1;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-
   while (1)
   {
 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	// ssd1306_Fill(Black);
+	 SSD1306.CurrentX = 0;
+	 SSD1306.CurrentY = 0;
 	 MPU6050_Read_All(&hi2c1, &MPU6050);
-	 /*HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
-	 sprintf(msg, "Gx%i \n", (uint8_t)MPU6050.Gx);*/
+
+	 //ssd1306_Fill(White);
+	ssd1306_WriteString("Temperature", Font_7x10,White);
+	ssd1306_UpdateScreen();
+
 	 HAL_Delay (100);
   }
   /* USER CODE END 3 */
@@ -126,10 +180,13 @@ void SystemClock_Config(void)
 
   /** Initializes the CPU, AHB and APB busses clocks 
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -138,19 +195,46 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
 }
 
 /* USER CODE BEGIN 4 */
+void ssd1306_Reset(void) {
+	// CS = High (not selected)
+	HAL_GPIO_WritePin(SSD1306_CS_Port, SSD1306_CS_Pin, GPIO_PIN_SET);
 
+	// Reset the OLED
+	HAL_GPIO_WritePin(SSD1306_Reset_Port, SSD1306_Reset_Pin, GPIO_PIN_RESET);
+	HAL_Delay(10);
+	HAL_GPIO_WritePin(SSD1306_Reset_Port, SSD1306_Reset_Pin, GPIO_PIN_SET);
+	HAL_Delay(10);
+}
+
+void ssd1306_WriteCommand(uint8_t byte) {
+    HAL_GPIO_WritePin(SSD1306_CS_Port, SSD1306_CS_Pin, GPIO_PIN_RESET); // select OLED
+    HAL_Delay(3);
+    HAL_GPIO_WritePin(SSD1306_DC_Port, SSD1306_DC_Pin, GPIO_PIN_RESET); // command
+    status = HAL_SPI_Transmit(&SSD1306_SPI_PORT, (uint8_t *) &byte, 1, HAL_MAX_DELAY);
+    HAL_GPIO_WritePin(SSD1306_CS_Port, SSD1306_CS_Pin, GPIO_PIN_SET); // un-select OLED
+    HAL_Delay(3);
+}
+
+void ssd1306_WriteData(uint8_t* buffer, size_t buff_size) {
+    HAL_GPIO_WritePin(SSD1306_CS_Port, SSD1306_CS_Pin, GPIO_PIN_RESET); // select OLED
+    HAL_Delay(3);
+    HAL_GPIO_WritePin(SSD1306_DC_Port, SSD1306_DC_Pin, GPIO_PIN_SET); // data
+    HAL_SPI_Transmit(&SSD1306_SPI_PORT, buffer, buff_size, HAL_MAX_DELAY);
+    HAL_GPIO_WritePin(SSD1306_CS_Port, SSD1306_CS_Pin, GPIO_PIN_SET); // un-select OLED
+    HAL_Delay(3);
+}
 /* USER CODE END 4 */
 
 /**
